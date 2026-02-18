@@ -1,0 +1,82 @@
+/* App custom styles */
+
+/* Smooth transitions */
+* {
+  transition: background-color 200ms ease-in-out, color 200ms ease-in-out;
+}
+
+/* Modal animations */
+.modal-enter {
+  animation: modalEnter 300ms ease-out;
+}
+
+@keyframes modalEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Emotion wheel specific */
+.emotion-wheel-container {
+  perspective: 1000px;
+}
+
+.emotion-segment {
+  cursor: pointer;
+  transition: all 200ms ease-in-out;
+}
+
+.emotion-segment:hover {
+  filter: brightness(1.1);
+  transform: scale(1.05);
+}
+
+.emotion-segment.selected {
+  filter: brightness(0.9);
+  stroke-width: 3;
+}
+
+/* Custom scrollbar for emotion logs */
+.emotion-logs-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.emotion-logs-container::-webkit-scrollbar-track {
+  background: #f0f0f0;
+}
+
+.emotion-logs-container::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 3px;
+}
+
+.emotion-logs-container::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Print styles */
+@media print {
+  body {
+    background: white;
+  }
+  
+  header,
+  footer,
+  nav {
+    display: none;
+  }
+}
