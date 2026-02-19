@@ -75,18 +75,18 @@
 ### 8️⃣ Test the App (5 min)
 
 **Test 1: Sign Up**
-- [v] Enter email: `test@example.com`
+- [ ] Enter email: `test@example.com`
 - [ ] Enter password: `password123`
 - [ ] Click "Create Account"
 - [ ] Wait for redirect (may see loading spinner)
 - [ ] Should see the emotion wheel screen
 
 **Test 2: Try Emotion Wheel**
-- [ ] Click on any colored segment in the wheel
-- [ ] Should go to level 2 emotions
-- [ ] Click on a level 2 emotion
-- [ ] Should go to level 3 emotions
-- [ ] Click on a level 3 emotion
+- [x] Click on any colored segment in the wheel
+- [x] Should go to level 2 emotions
+- [x] Click on a level 2 emotion
+- [x] Should go to level 3 emotions
+- [x] Click on a level 3 emotion
 - [ ] Modal should open with AI-generated strategies
 
 **Test 3: View AI Strategies**
