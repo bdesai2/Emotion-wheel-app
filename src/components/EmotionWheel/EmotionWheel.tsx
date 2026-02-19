@@ -27,7 +27,7 @@ export const EmotionWheel: React.FC<EmotionWheelProps> = ({ emotions, onEmotionS
 
   const currentEmotions = selectedTier2?.children || selectedTier1?.children || emotions;
   const segmentCount = currentEmotions.length;
-  const angleSlice = 180 / segmentCount; // Half circle
+  const angleSlice = 360 / segmentCount; // Full circle
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-blue-50 to-indigo-50">
@@ -51,7 +51,7 @@ export const EmotionWheel: React.FC<EmotionWheelProps> = ({ emotions, onEmotionS
               const x2 = 200 + 180 * Math.cos((endAngle - 90) * Math.PI / 180);
               const y2 = 200 + 180 * Math.sin((endAngle - 90) * Math.PI / 180);
               
-              const largeArc = angleSlice > 90 ? 1 : 0;
+              const largeArc = angleSlice > 180 ? 1 : 0;
               
               return (
                 <motion.g

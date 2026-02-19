@@ -1,0 +1,42 @@
+HAPPY (Tier 1)
+├── Joyful (high energy happiness)
+│   ├── Ecstatic
+│   ├── Enthusiastic  
+│   ├── Elated
+│   └── Free/Liberated
+│
+├── Playful (lighthearted fun)
+│   ├── Silly
+│   ├── Cheeky
+│   ├── Goofy
+│   └── Mischievous
+│
+├── Content (satisfied, comfortable)
+│   ├── Satisfied
+│   ├── Comfortable
+│   ├── At ease
+│   └── Fulfilled
+│
+├── Peaceful (calm and serene)
+│   ├── Calm
+│   ├── Serene
+│   ├── Tranquil
+│   └── Relaxed
+│
+├── Interested (engaged, curious)
+│   ├── Curious
+│   ├── Inquisitive
+│   ├── Fascinated
+│   └── Engaged
+│
+├── Proud (achievement, self-worth)
+│   ├── Accomplished
+│   ├── Confident
+│   ├── Successful
+│   └── Empowered
+│
+└── Appreciated (valued, belonging) **(6th option)**
+    ├── Accepted
+    ├── Respected
+    ├── Valued
+    └── Included

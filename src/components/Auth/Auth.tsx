@@ -6,9 +6,10 @@ import { LoadingSpinner } from '../ui/LoadingSpinner';
 interface AuthProps {
   onSignIn: (email: string, password: string) => Promise<void>;
   onSignUp: (email: string, password: string) => Promise<void>;
+  onContinueAsGuest: () => void;
 }
 
-export const Auth: React.FC<AuthProps> = ({ onSignIn, onSignUp }) => {
+export const Auth: React.FC<AuthProps> = ({ onSignIn, onSignUp, onContinueAsGuest }) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -99,6 +100,24 @@ export const Auth: React.FC<AuthProps> = ({ onSignIn, onSignUp }) => {
               {isSignUp ? 'Create Account' : 'Sign In'}
             </Button>
           </form>
+
+          {/* Divider */}
+          <div className="my-6 flex items-center gap-4">
+            <div className="flex-1 h-px bg-gray-300"></div>
+            <span className="text-sm text-gray-500">or</span>
+            <div className="flex-1 h-px bg-gray-300"></div>
+          </div>
+
+          {/* Guest Button */}
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            onClick={onContinueAsGuest}
+            disabled={loading}
+          >
+            Continue as Guest
+          </Button>
 
           {/* Toggle */}
           <div className="mt-6 text-center">

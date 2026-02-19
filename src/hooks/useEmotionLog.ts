@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { supabase } from '../services/supabase';
 import type { EmotionLog } from '../types/emotion.types';
 
-export const useEmotionLog = () => {
+const GUEST_EMOTIONS_KEY = 'guest_emotion_logs';
+
+export const useEmotionLog = (isGuest: boolean = false) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,26 +19,47 @@ export const useEmotionLog = () => {
       setLoading(true);
       setError(null);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      const { data: result, error: err } = await supabase
-        .from('emotion_logs')
-        .insert({
-          user_id: user.id,
+      if (isGuest) {
+        // Store guest emotion logs in localStorage
+        const emotionLog: EmotionLog = {
+          id: Date.now().toString(),
+          user_id: 'guest',
           emotion_id: data.emotionId,
           tier_1_emotion_id: data.tier1EmotionId,
           tier_2_emotion_id: data.tier2EmotionId,
           tier_3_emotion_id: data.tier3EmotionId,
           notes: data.notes,
-          logged_at: new Date().toISOString()
-        })
-        .select()
-        .single();
+          logged_at: new Date().toISOString(),
+        } as EmotionLog;
 
-      if (err) throw err;
-      setLoading(false);
-      return result as EmotionLog;
+        const existingLogs = JSON.parse(localStorage.getItem(GUEST_EMOTIONS_KEY) || '[]');
+        existingLogs.push(emotionLog);
+        localStorage.setItem(GUEST_EMOTIONS_KEY, JSON.stringify(existingLogs));
+
+        setLoading(false);
+        return emotionLog;
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
+        const { data: result, error: err } = await supabase
+          .from('emotion_logs')
+          .insert({
+            user_id: user.id,
+            emotion_id: data.emotionId,
+            tier_1_emotion_id: data.tier1EmotionId,
+            tier_2_emotion_id: data.tier2EmotionId,
+            tier_3_emotion_id: data.tier3EmotionId,
+            notes: data.notes,
+            logged_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (err) throw err;
+        setLoading(false);
+        return result as EmotionLog;
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to log emotion';
       setError(message);
@@ -50,18 +73,25 @@ export const useEmotionLog = () => {
       setLoading(true);
       setError(null);
 
-      const { data, error: err } = await supabase
-        .from('emotion_logs')
-        .select(`
-          *,
-          emotion:emotions(name, color)
-        `)
-        .order('logged_at', { ascending: false })
-        .limit(limit);
+      if (isGuest) {
+        // Retrieve guest emotion logs from localStorage
+        const existingLogs = JSON.parse(localStorage.getItem(GUEST_EMOTIONS_KEY) || '[]');
+        setLoading(false);
+        return existingLogs.slice(-limit).reverse() as EmotionLog[];
+      } else {
+        const { data, error: err } = await supabase
+          .from('emotion_logs')
+          .select(`
+            *,
+            emotion:emotions(name, color)
+          `)
+          .order('logged_at', { ascending: false })
+          .limit(limit);
 
-      if (err) throw err;
-      setLoading(false);
-      return (data as EmotionLog[]) || [];
+        if (err) throw err;
+        setLoading(false);
+        return (data as EmotionLog[]) || [];
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch emotion logs';
       setError(message);

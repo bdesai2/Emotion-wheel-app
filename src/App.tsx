@@ -12,8 +12,8 @@ import { LoadingSpinner } from './components/ui/LoadingSpinner';
 import './App.css';
 
 function App() {
-  const { user, loading: authLoading, signUp, signIn, signOut } = useAuth();
-  const { logEmotion } = useEmotionLog();
+  const { user, loading: authLoading, signUp, signIn, signOut, continueAsGuest, isGuest } = useAuth();
+  const { logEmotion } = useEmotionLog(isGuest);
   const {
     emotions,
     selectedEmotionForModal,
@@ -47,6 +47,7 @@ function App() {
           const { error } = await signUp(email, password);
           if (error) throw new Error(error);
         }}
+        onContinueAsGuest={continueAsGuest}
       />
     );
   }
@@ -96,11 +97,17 @@ function App() {
             🌈 Emotion Wheel
           </motion.h1>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{user?.email}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">{user?.email}</span>
+              {isGuest && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Guest Mode</span>}
+            </div>
             <Button
               variant="secondary"
               size="sm"
-              onClick={signOut}
+              onClick={() => {
+                signOut();
+                localStorage.removeItem('auth_mode');
+              }}
             >
               Sign Out
             </Button>

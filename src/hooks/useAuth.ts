@@ -6,6 +6,7 @@ export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isGuest, setIsGuest] = useState(false);
 
   useEffect(() => {
     // Check active session
@@ -83,5 +84,17 @@ export const useAuth = () => {
     }
   };
 
-  return { user, loading, error, signUp, signIn, signOut };
+  const continueAsGuest = () => {
+    const guestUser: User = {
+      id: `guest_${Date.now()}`,
+      email: 'guest@anonymous',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setUser(guestUser);
+    setIsGuest(true);
+    localStorage.setItem('auth_mode', 'guest');
+  };
+
+  return { user, loading, error, signUp, signIn, signOut, continueAsGuest, isGuest };
 };

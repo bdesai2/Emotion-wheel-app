@@ -247,13 +247,13 @@ INSERT INTO emotions (name, tier, parent_id, description, color, characteristics
 -- These are manual/fallback strategies
 -- AI will generate more at runtime from Claude API
 
-INSERT INTO coping_strategies (emotion_id, strategy_text, generated_by) VALUES
-((SELECT id FROM emotions WHERE name = 'Anxious' AND tier = 2), 'Practice deep breathing - inhale for 4 counts, hold for 4, exhale for 4', 'manual'),
-((SELECT id FROM emotions WHERE name = 'Anxious' AND tier = 2), 'Break your worry into smaller, manageable problems', 'manual'),
-((SELECT id FROM emotions WHERE name = 'Lonely' AND tier = 2), 'Reach out to a friend or family member for a quick chat', 'manual'),
-((SELECT id FROM emotions WHERE name = 'Lonely' AND tier = 2), 'Join a community or group activity that interests you', 'manual'),
-((SELECT id FROM emotions WHERE name = 'Frustrated' AND tier = 2), 'Take a 10-minute break and do something you enjoy', 'manual'),
-((SELECT id FROM emotions WHERE name = 'Frustrated' AND tier = 2), 'Write down the problem and brainstorm three solutions', 'manual'));
+INSERT INTO coping_strategies (emotion_id, strategy_text, generated_by)
+SELECT id, 'Practice deep breathing - inhale for 4 counts, hold for 4, exhale for 4', 'manual' FROM emotions WHERE name = 'Anxious' AND tier = 2
+UNION ALL SELECT id, 'Break your worry into smaller, manageable problems', 'manual' FROM emotions WHERE name = 'Anxious' AND tier = 2
+UNION ALL SELECT id, 'Reach out to a friend or family member for a quick chat', 'manual' FROM emotions WHERE name = 'Lonely' AND tier = 2
+UNION ALL SELECT id, 'Join a community or group activity that interests you', 'manual' FROM emotions WHERE name = 'Lonely' AND tier = 2
+UNION ALL SELECT id, 'Take a 10-minute break and do something you enjoy', 'manual' FROM emotions WHERE name = 'Frustrated' AND tier = 2
+UNION ALL SELECT id, 'Write down the problem and brainstorm three solutions', 'manual' FROM emotions WHERE name = 'Frustrated' AND tier = 2;
 
 -- ============================================
 -- 18. VERIFY DATA
