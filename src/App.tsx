@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import type { Emotion } from './types/emotion.types';
 import { useAuth } from './hooks/useAuth';
@@ -15,7 +15,6 @@ function App() {
   const { user, loading: authLoading, signUp, signIn, signOut, continueAsGuest, isGuest } = useAuth();
   const { logEmotion } = useEmotionLog(isGuest);
   const {
-    emotions,
     selectedEmotionForModal,
     showModal,
     selectedTier1,
@@ -124,7 +123,6 @@ function App() {
         ) : (
           <>
             <EmotionWheel
-              emotions={emotions}
               onEmotionSelect={handleEmotionSelect}
             />
 

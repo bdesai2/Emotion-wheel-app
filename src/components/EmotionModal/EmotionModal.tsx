@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Emotion } from '../../types/emotion.types';
 import { generateCopingStrategies } from '../../services/anthropic';
@@ -21,40 +21,36 @@ export const EmotionModal: React.FC<EmotionModalProps> = ({
   onConfirm,
 }) => {
   const [strategies, setStrategies] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [fetchedOnce, setFetchedOnce] = useState(false);
 
-  useEffect(() => {
-    const fetchStrategies = async () => {
-      if (!emotion) return;
-      
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await generateCopingStrategies(
-          emotion.name,
-          emotion.description
-        );
-        setStrategies(result);
-      } catch (err) {
-        console.error('Failed to generate strategies:', err);
-        setError('Failed to generate coping strategies. Please try again.');
-        // Fallback strategies
-        setStrategies([
-          'Take a deep breath and pause for a moment',
-          'Identify what triggered this feeling',
-          'Talk to someone you trust about how you feel',
-          'Engage in a physical activity or movement',
-          'Practice mindfulness or meditation',
-        ]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStrategies();
-  }, [emotion]);
+  // Do NOT auto-call the AI API. Provide a button to fetch strategies on demand.
+  const handleGetStrategies = async () => {
+    if (!emotion) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await generateCopingStrategies(emotion.name, emotion.description);
+      setStrategies(result);
+      setFetchedOnce(true);
+    } catch (err) {
+      console.error('Failed to generate strategies:', err);
+      setError('Failed to generate coping strategies. Please try again.');
+      // Fallback strategies
+      setStrategies([
+        'Take a deep breath and pause for a moment',
+        'Identify what triggered this feeling',
+        'Talk to someone you trust about how you feel',
+        'Engage in a physical activity or movement',
+        'Practice mindfulness or meditation',
+      ]);
+      setFetchedOnce(true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleConfirm = async () => {
     if (!emotion) return;
@@ -120,6 +116,53 @@ export const EmotionModal: React.FC<EmotionModalProps> = ({
                 <p className="text-gray-700">{emotion.description}</p>
               </div>
 
+                {/* Triggers & Physical Sensations (from DB if present) */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Triggers & Physical Sensations</h3>
+                  <div className="text-gray-700 space-y-3">
+                    {/* triggers: support several possible field names */}
+                    {(() => {
+                      const anyE = emotion as any;
+                      const triggers = anyE.triggers || anyE.triggers_list || anyE.trigger || anyE.triggersText || anyE.triggers_text;
+                      const sensations = anyE.physical_sensations || anyE.physicalSensations || anyE.physical || anyE.sensations || anyE.physical_sensation;
+
+                      return (
+                        <>
+                          {triggers && (
+                            <div>
+                              <h4 className="text-sm font-medium text-gray-900">Common triggers</h4>
+                              {Array.isArray(triggers) ? (
+                                <ul className="list-disc pl-5 text-gray-700">
+                                  {triggers.map((t: any, i: number) => <li key={i}>{t}</li>)}
+                                </ul>
+                              ) : (
+                                <p className="text-gray-700">{String(triggers)}</p>
+                              )}
+                            </div>
+                          )}
+
+                          {sensations && (
+                            <div className="mt-3">
+                              <h4 className="text-sm font-medium text-gray-900">Physical sensations</h4>
+                              {Array.isArray(sensations) ? (
+                                <ul className="list-disc pl-5 text-gray-700">
+                                  {sensations.map((s: any, i: number) => <li key={i}>{s}</li>)}
+                                </ul>
+                              ) : (
+                                <p className="text-gray-700">{String(sensations)}</p>
+                              )}
+                            </div>
+                          )}
+
+                          {!triggers && !sensations && (
+                            <p className="text-gray-700">No triggers or physical sensations recorded for this emotion.</p>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+
               {/* Characteristics */}
               {emotion.characteristics && emotion.characteristics.length > 0 && (
                 <div>
@@ -135,34 +178,50 @@ export const EmotionModal: React.FC<EmotionModalProps> = ({
                 </div>
               )}
 
-              {/* Coping Strategies */}
+              {/* Coping Strategies (manual) */}
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">Coping strategies</h3>
-                {loading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <LoadingSpinner size="md" text="Generating personalized strategies..." />
-                  </div>
-                ) : error ? (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                    {error}
-                  </div>
-                ) : (
+
+                {!fetchedOnce && (
                   <div className="space-y-3">
-                    {strategies.map((strategy, idx) => (
-                      <motion.div
-                        key={idx}
-                        className="p-4 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer group"
-                        whileHover={{ scale: 1.02 }}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: idx * 0.1 }}
-                      >
-                        <p className="text-gray-800 text-sm group-hover:text-gray-900 transition-colors">
-                          {strategy}
-                        </p>
-                      </motion.div>
-                    ))}
+                    <p className="text-gray-700">Get personalized coping strategies generated by the AI. This will call the AI service from the server.</p>
+                    <div className="pt-3">
+                      <Button variant="secondary" onClick={handleGetStrategies} disabled={loading}>
+                        {loading ? 'Generating…' : 'Get coping strategies'}
+                      </Button>
+                    </div>
                   </div>
+                )}
+
+                {fetchedOnce && (
+                  <>
+                    {loading ? (
+                      <div className="flex items-center justify-center py-6">
+                        <LoadingSpinner size="md" text="Generating personalized strategies..." />
+                      </div>
+                    ) : error ? (
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                        {error}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {strategies.map((strategy, idx) => (
+                          <motion.div
+                            key={idx}
+                            className="p-4 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer group"
+                            whileHover={{ scale: 1.02 }}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.1 }}
+                          >
+                            <p className="text-gray-800 text-sm group-hover:text-gray-900 transition-colors">
+                              {strategy}
+                            </p>
+                          </motion.div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 

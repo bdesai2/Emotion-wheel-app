@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '../ui/Button';
-import { LoadingSpinner } from '../ui/LoadingSpinner';
 
 interface AuthProps {
   onSignIn: (email: string, password: string) => Promise<void>;
