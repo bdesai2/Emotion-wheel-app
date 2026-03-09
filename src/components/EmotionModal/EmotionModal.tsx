@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Emotion } from '../../types/emotion.types';
 import { generateCopingStrategies } from '../../services/anthropic';
+import { supabase } from '../../services/supabase';
 import { Button } from '../ui/Button';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 
@@ -32,7 +33,28 @@ export const EmotionModal: React.FC<EmotionModalProps> = ({
     try {
       setLoading(true);
       setError(null);
-      const result = await generateCopingStrategies(emotion.name, emotion.description);
+      
+      // Check if the emotion with the same ID already has strategies in the DB and use them if present
+      try {
+        const { data: existing, error: selectErr } = await supabase
+          .from('coping_strategies')
+          .select('strategy_text')
+          .eq('emotion_id', emotion.id)
+          .order('created_at', { ascending: true });
+
+        if (selectErr) {
+          console.error('Error querying coping_strategies:', selectErr);
+        } else if (existing && existing.length > 0) {
+          const texts = (existing as any[]).map((r) => r.strategy_text || r.strategyText || String(r));
+          setStrategies(texts);
+          setFetchedOnce(true);
+          return;
+        }
+      } catch (dbErr) {
+        console.error('Failed to check existing strategies in DB:', dbErr);
+      }
+
+      const result = await generateCopingStrategies(emotion.name, emotion.description, emotion.id);
       setStrategies(result);
       setFetchedOnce(true);
     } catch (err) {
@@ -40,6 +62,7 @@ export const EmotionModal: React.FC<EmotionModalProps> = ({
       setError('Failed to generate coping strategies. Please try again.');
       // Fallback strategies
       setStrategies([
+        'Unable to fetch personalized strategies. Here are some general coping strategies to try:',
         'Take a deep breath and pause for a moment',
         'Identify what triggered this feeling',
         'Talk to someone you trust about how you feel',
@@ -118,48 +141,15 @@ export const EmotionModal: React.FC<EmotionModalProps> = ({
 
                 {/* Triggers & Physical Sensations (from DB if present) */}
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Triggers & Physical Sensations</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Triggers</h3>
                   <div className="text-gray-700 space-y-3">
                     {/* triggers: support several possible field names */}
-                    {(() => {
-                      const anyE = emotion as any;
-                      const triggers = anyE.triggers || anyE.triggers_list || anyE.trigger || anyE.triggersText || anyE.triggers_text;
-                      const sensations = anyE.physical_sensations || anyE.physicalSensations || anyE.physical || anyE.sensations || anyE.physical_sensation;
-
-                      return (
-                        <>
-                          {triggers && (
-                            <div>
-                              <h4 className="text-sm font-medium text-gray-900">Common triggers</h4>
-                              {Array.isArray(triggers) ? (
-                                <ul className="list-disc pl-5 text-gray-700">
-                                  {triggers.map((t: any, i: number) => <li key={i}>{t}</li>)}
-                                </ul>
-                              ) : (
-                                <p className="text-gray-700">{String(triggers)}</p>
-                              )}
-                            </div>
-                          )}
-
-                          {sensations && (
-                            <div className="mt-3">
-                              <h4 className="text-sm font-medium text-gray-900">Physical sensations</h4>
-                              {Array.isArray(sensations) ? (
-                                <ul className="list-disc pl-5 text-gray-700">
-                                  {sensations.map((s: any, i: number) => <li key={i}>{s}</li>)}
-                                </ul>
-                              ) : (
-                                <p className="text-gray-700">{String(sensations)}</p>
-                              )}
-                            </div>
-                          )}
-
-                          {!triggers && !sensations && (
-                            <p className="text-gray-700">No triggers or physical sensations recorded for this emotion.</p>
-                          )}
-                        </>
-                      );
-                    })()}
+                    {emotion.triggers}
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Physical Sensations</h3>
+                  <div className="text-gray-700 space-y-3">
+                    {/* physical sensations: support several possible field names */}
+                    {emotion.physicalSensations}
                   </div>
                 </div>
 

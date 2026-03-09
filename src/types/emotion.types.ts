@@ -5,6 +5,8 @@ export interface Emotion {
   parentId: number | null;
   description: string;
   color: string;
+  triggers?: string;
+  physicalSensations?: string;
   characteristics?: string[];
   children?: Emotion[];
 }

@@ -28,6 +28,7 @@ export const EmotionWheel: React.FC<EmotionWheelProps> = ({ emotions, onEmotionS
           .from('emotions')
           .select('*')
           .eq('tier', 1)
+          .eq('enabled', true)
           .order('id', { ascending: true });
 
         if (err1 || !t1Rows || t1Rows.length === 0) {
@@ -43,6 +44,7 @@ export const EmotionWheel: React.FC<EmotionWheelProps> = ({ emotions, onEmotionS
           .select('*')
           .in('parent_id', tier1Ids)
           .eq('tier', 2)
+          .eq('enabled', true)
           .order('id', { ascending: true });
 
         const tier2Ids = (t2Rows || []).map((r: any) => r.id);
@@ -54,24 +56,49 @@ export const EmotionWheel: React.FC<EmotionWheelProps> = ({ emotions, onEmotionS
             .select('*')
             .in('parent_id', tier2Ids)
             .eq('tier', 3)
+            .eq('enabled', true)
             .order('id', { ascending: true });
           if (!err3) tier3Rows = t3 || [];
         }
 
-        const normalize = (r: any): Emotion => ({
-          id: r.id,
-          name: r.name,
-          tier: Number(r.tier) as 1 | 2 | 3,
-          parentId: r.parent_id ?? r.parentId ?? null,
-          description: r.description ?? r.desc ?? '',
-          color: r.color ?? '#999',
-          characteristics: Array.isArray(r.characteristics)
-            ? r.characteristics
-            : (typeof r.characteristics === 'string' ? ((): string[] => {
-                try { return JSON.parse(r.characteristics); } catch { return []; }
-              })() : []),
-          children: [] as Emotion[],
-        });
+        const normalize = (r: any): Emotion => {
+          // helper to coerce field values to string or string[]
+          const coerceList = (val: any): string | string[] => {
+            if (Array.isArray(val)) return val;
+            if (typeof val === 'string') {
+              // try parse JSON arrays
+              try {
+                const parsed = JSON.parse(val);
+                if (Array.isArray(parsed)) return parsed;
+              } catch (e) {
+                // not JSON, fallthrough
+              }
+              return val;
+            }
+            return '';
+          };
+
+          // Accept several possible DB field names for triggers and physical sensations
+          const triggersField = r.triggers ?? r.triggers_list ?? r.triggers_text ?? r.triggersText ?? r.trigger ?? r.triggersText ?? '';
+          const physicalField = r.physical_sensations ?? r.physicalSensations ?? r.physical ?? r.sensations ?? r.physical_sensation ?? '';
+
+          return {
+            id: r.id,
+            name: r.name,
+            tier: Number(r.tier) as 1 | 2 | 3,
+            parentId: r.parent_id ?? r.parentId ?? null,
+            description: r.description ?? r.desc ?? '',
+            triggers: r.triggers, //coerceList(triggersField),
+            physicalSensations: r.physicalSensations, //coerceList(physicalField) as any,
+            color: r.color ?? '#999',
+            characteristics: Array.isArray(r.characteristics)
+              ? r.characteristics
+              : (typeof r.characteristics === 'string' ? ((): string[] => {
+                  try { return JSON.parse(r.characteristics); } catch { return []; }
+                })() : []),
+            children: [] as Emotion[],
+          };
+        };
 
         const tier1Map = new Map<number, Emotion>();
         const tier2Map = new Map<number, Emotion>();
