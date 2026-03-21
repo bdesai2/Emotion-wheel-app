@@ -10,9 +10,10 @@ import { EmotionModal } from './components/EmotionModal/EmotionModal';
 import { Button } from './components/ui/Button';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
 import './App.css';
+import { useEffect } from 'react';
 
 function App() {
-  const { user, loading: authLoading, signUp, signIn, signOut, continueAsGuest, isGuest } = useAuth();
+  const { user, loading: authLoading, signUp, signIn, signOut, continueAsGuest, isGuest, signInWithProvider } = useAuth();
   const { logEmotion } = useEmotionLog(isGuest);
   const {
     selectedEmotionForModal,
@@ -26,6 +27,14 @@ function App() {
     reset,
   } = useEmotionStore();
   const [loggingEmotion, setLoggingEmotion] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  useEffect(() => {
+    // Close auth modal when a non-guest user signs in
+    if (user && !isGuest && showAuthModal) {
+      setShowAuthModal(false);
+    }
+  }, [user, isGuest, showAuthModal]);
 
   if (authLoading) {
     return (
@@ -47,6 +56,10 @@ function App() {
           if (error) throw new Error(error);
         }}
         onContinueAsGuest={continueAsGuest}
+        onSignInWithProvider={async (provider: string) => {
+          const { error } = await signInWithProvider?.(provider as 'google');
+          if (error) throw new Error(error as string);
+        }}
       />
     );
   }
@@ -56,16 +69,18 @@ function App() {
     setShowModal(true);
   };
 
-  const handleConfirmEmotion = async (emotion: Emotion) => {
+  const handleConfirmEmotion = async (emotion: Emotion, notes?: string) => {
     try {
       setLoggingEmotion(true);
       
-      await logEmotion({
+      const result = await logEmotion({
         emotionId: emotion.id,
-        tier1EmotionId: selectedTier1?.id || 0,
-        tier2EmotionId: selectedTier2?.id,
-        tier3EmotionId: emotion.id,
+        notes: notes,
       });
+
+      if (!result) {
+        throw new Error('Logging failed');
+      }
 
       // Reset and close
       setShowModal(false);
@@ -100,19 +115,48 @@ function App() {
               <span className="text-sm text-gray-600">{user?.email}</span>
               {isGuest && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Guest Mode</span>}
             </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                signOut();
-                localStorage.removeItem('auth_mode');
-              }}
-            >
-              Sign Out
-            </Button>
+            {isGuest ? (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setShowAuthModal(true)}
+              >
+                Login
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  signOut();
+                  localStorage.removeItem('auth_mode');
+                }}
+              >
+                Sign Out
+              </Button>
+            )}
           </div>
         </div>
       </header>
+
+      {/* Auth modal for guest -> login flow */}
+      {showAuthModal && (
+        <Auth
+          onSignIn={async (email, password) => {
+            const { error } = await signIn(email, password);
+            if (error) throw new Error(error);
+          }}
+          onSignUp={async (email, password) => {
+            const { error } = await signUp(email, password);
+            if (error) throw new Error(error);
+          }}
+          onContinueAsGuest={continueAsGuest}
+          onSignInWithProvider={async (provider: string) => {
+            const { error } = await signInWithProvider?.(provider as 'google');
+            if (error) throw new Error(error as string);
+          }}
+        />
+      )}
 
       {/* Main Content */}
       <main className="flex-1">
@@ -134,6 +178,8 @@ function App() {
               onClose={() => {
                 setShowModal(false);
               }}
+              isGuest={isGuest}
+              onOpenAuth={() => setShowAuthModal(true)}
               onConfirm={handleConfirmEmotion}
             />
           </>

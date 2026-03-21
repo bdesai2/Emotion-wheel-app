@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "server": "tsx server/server.ts",
+    "server:debug": "node --inspect --import tsx server/server.ts",
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
     "build": "tsc && vite build",
     "preview": "vite preview",

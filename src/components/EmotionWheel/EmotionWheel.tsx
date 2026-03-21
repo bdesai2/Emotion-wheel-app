@@ -25,11 +25,7 @@ export const EmotionWheel: React.FC<EmotionWheelProps> = ({ emotions, onEmotionS
     (async () => {
       try {
         const { data: t1Rows, error: err1 } = await supabase
-          .from('emotions')
-          .select('*')
-          .eq('tier', 1)
-          .eq('enabled', true)
-          .order('id', { ascending: true });
+          .from('emotions').select('*').eq('tier', 1).eq('enabled', true).order('id', { ascending: true });
 
         if (err1 || !t1Rows || t1Rows.length === 0) {
           console.error('Failed to load emotions for wheel, falling back to constants', err1);    
@@ -40,24 +36,14 @@ export const EmotionWheel: React.FC<EmotionWheelProps> = ({ emotions, onEmotionS
         const tier1Ids = t1Rows.map((r: any) => r.id);
 
         const { data: t2Rows } = await supabase
-          .from('emotions')
-          .select('*')
-          .in('parent_id', tier1Ids)
-          .eq('tier', 2)
-          .eq('enabled', true)
-          .order('id', { ascending: true });
+          .from('emotions').select('*').in('parent_id', tier1Ids).eq('tier', 2).eq('enabled', true).order('id', { ascending: true });
 
         const tier2Ids = (t2Rows || []).map((r: any) => r.id);
 
         let tier3Rows: any[] = [];
         if (tier2Ids.length > 0) {
           const { data: t3, error: err3 } = await supabase
-            .from('emotions')
-            .select('*')
-            .in('parent_id', tier2Ids)
-            .eq('tier', 3)
-            .eq('enabled', true)
-            .order('id', { ascending: true });
+            .from('emotions').select('*').in('parent_id', tier2Ids).eq('tier', 3).eq('enabled', true).order('id', { ascending: true });
           if (!err3) tier3Rows = t3 || [];
         }
 
@@ -83,9 +69,7 @@ export const EmotionWheel: React.FC<EmotionWheelProps> = ({ emotions, onEmotionS
           const physicalField = r.physical_sensations ?? r.physicalSensations ?? r.physical ?? r.sensations ?? r.physical_sensation ?? '';
 
           return {
-            id: r.id,
-            name: r.name,
-            tier: Number(r.tier) as 1 | 2 | 3,
+            id: r.id, name: r.name, tier: Number(r.tier) as 1 | 2 | 3,
             parentId: r.parent_id ?? r.parentId ?? null,
             description: r.description ?? r.desc ?? '',
             triggers: r.triggers, //coerceList(triggersField),
@@ -116,21 +100,18 @@ export const EmotionWheel: React.FC<EmotionWheelProps> = ({ emotions, onEmotionS
 
         // Ensure every tier-2 emotion has at least one child. If none exist in the DB,
         // create a placeholder tier-3 child so the UI always drills down to a Level 3.
-        tier2Map.forEach((v) => {
+        /*tier2Map.forEach((v) => {
           if (!v.children || v.children.length === 0) {
             const placeholder: Emotion = {
               id: -(v.id), // negative id to avoid colliding with DB ids
-              name: v.name,
-              tier: 3,
-              parentId: v.id,
+              name: v.name, tier: 3, parentId: v.id,
               description: v.description || v.name,
               color: v.color || '#999',
-              characteristics: v.characteristics || [],
-              children: [],
+              characteristics: v.characteristics || [], children: [],
             };
             v.children = [placeholder];
           }
-        });
+        });*/
 
         const roots = Array.from(tier1Map.values());
         if (mounted) setLocalEmotions(roots.length ? roots : EMOTION_WHEEL_DATA);
@@ -148,7 +129,13 @@ export const EmotionWheel: React.FC<EmotionWheelProps> = ({ emotions, onEmotionS
     setSelectedTier2(null);
   };
   const handleTier2Select = (emotion: Emotion) => {
-    setSelectedTier2(emotion);
+    if(emotion.children && emotion.children.length > 0) {
+      setSelectedTier2(emotion);
+    } else {
+      // if no children, treat as final selection
+      onEmotionSelect(emotion);
+    }
+    //setSelectedTier2(emotion);
   };
 
   const handleTier3Select = (emotion: Emotion) => {
@@ -157,7 +144,8 @@ export const EmotionWheel: React.FC<EmotionWheelProps> = ({ emotions, onEmotionS
 
   const currentEmotions = selectedTier2?.children || selectedTier1?.children || localEmotions;
   const segmentCount = currentEmotions.length;
-  const angleSlice = 360 / segmentCount; // Full circle
+  let angleSlice = 360 / segmentCount; // Full circle
+  if (segmentCount < 3) angleSlice = 180/segmentCount; // For 2 or fewer segments, split half-circle to avoid thin slivers
 
   // Flatten all emotions (roots + children + grandchildren) so we generate gradients for every ID
   const allEmotions: Emotion[] = [];

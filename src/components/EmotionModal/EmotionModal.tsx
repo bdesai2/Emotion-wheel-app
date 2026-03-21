@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Emotion } from '../../types/emotion.types';
 import { generateCopingStrategies } from '../../services/anthropic';
-import { supabase } from '../../services/supabase';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 import { Button } from '../ui/Button';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 
@@ -11,21 +11,72 @@ interface EmotionModalProps {
   tier1?: Emotion;
   tier2?: Emotion;
   onClose: () => void;
-  onConfirm: (emotion: Emotion) => void;
+  onConfirm: (emotion: Emotion, notes?: string) => void;
+  isGuest?: boolean;
+  onOpenAuth?: () => void;
 }
 
 export const EmotionModal: React.FC<EmotionModalProps> = ({
-  emotion,
-  tier1,
-  tier2,
-  onClose,
-  onConfirm,
+  emotion, tier1, tier2, onClose, onConfirm, isGuest, onOpenAuth,
 }) => {
   const [strategies, setStrategies] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [fetchedOnce, setFetchedOnce] = useState(false);
+  const [notes, setNotes] = useState('');
+
+  // Autosave draft notes to localStorage while modal is open
+  const saveTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    // When emotion opens, load any saved draft
+    if (emotion) {
+      try {
+        const key = `emotion_notes_draft_${emotion.id}`;
+        const saved = localStorage.getItem(key);
+        if (saved) setNotes(saved);
+      } catch (e) {
+        // ignore localStorage errors
+      }
+    } else {
+      setNotes('');
+    }
+    return () => {
+      // clear pending timer when modal closes or emotion changes
+      if (saveTimer.current) {
+        window.clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+    };
+  }, [emotion]);
+
+  useEffect(() => {
+    if (!emotion) return;
+    // debounce save
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current);
+    }
+    saveTimer.current = window.setTimeout(() => {
+      try {
+        const key = `emotion_notes_draft_${emotion.id}`;
+        if (notes && notes.trim().length > 0) {
+          localStorage.setItem(key, notes);
+        } else {
+          localStorage.removeItem(key); 
+        }
+      } catch (e) {
+        // ignore
+      }
+    }, 500) as unknown as number;
+
+    return () => {
+      if (saveTimer.current) {
+        window.clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+    };
+  }, [notes, emotion]);
 
   // Do NOT auto-call the AI API. Provide a button to fetch strategies on demand.
   const handleGetStrategies = async () => {
@@ -34,24 +85,23 @@ export const EmotionModal: React.FC<EmotionModalProps> = ({
       setLoading(true);
       setError(null);
       
-      // Check if the emotion with the same ID already has strategies in the DB and use them if present
+      // Check with server if the emotion already has strategies and use them if present
       try {
-        const { data: existing, error: selectErr } = await supabase
-          .from('coping_strategies')
-          .select('strategy_text')
-          .eq('emotion_id', emotion.id)
-          .order('created_at', { ascending: true });
-
-        if (selectErr) {
-          console.error('Error querying coping_strategies:', selectErr);
-        } else if (existing && existing.length > 0) {
-          const texts = (existing as any[]).map((r) => r.strategy_text || r.strategyText || String(r));
-          setStrategies(texts);
-          setFetchedOnce(true);
-          return;
+        const resp = await fetch(`${API_BASE_URL}/api/coping-strategies?emotionId=${emotion.id}`);
+        if (resp.ok) {
+          const json = await resp.json();
+          const existing = json.strategies || [];
+          if (existing && existing.length > 0) {
+            setStrategies(existing);
+            setFetchedOnce(true);
+            return;
+          }
+        } else {
+          const errJson = await resp.json().catch(() => ({}));
+          console.error('Server returned error checking coping strategies:', errJson);
         }
       } catch (dbErr) {
-        console.error('Failed to check existing strategies in DB:', dbErr);
+        console.error('Failed to check existing strategies on server:', dbErr);
       }
 
       const result = await generateCopingStrategies(emotion.name, emotion.description, emotion.id);
@@ -80,7 +130,12 @@ export const EmotionModal: React.FC<EmotionModalProps> = ({
     
     try {
       setConfirming(true);
-      onConfirm(emotion);
+      onConfirm(emotion, notes);
+      // Clear saved draft after user confirms
+      try {
+        const key = `emotion_notes_draft_${emotion.id}`;
+        localStorage.removeItem(key);
+      } catch (e) {}
     } catch (err) {
       console.error('Error confirming emotion:', err);
       setError('Failed to log emotion. Please try again.');
@@ -167,7 +222,6 @@ export const EmotionModal: React.FC<EmotionModalProps> = ({
                   </div>
                 </div>
               )}
-
               {/* Coping Strategies (manual) */}
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">Coping strategies</h3>
@@ -214,7 +268,17 @@ export const EmotionModal: React.FC<EmotionModalProps> = ({
                   </>
                 )}
               </div>
-
+              {/* Notes */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Notes (optional)</h3>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={4}
+                  placeholder="Add any notes about this experience (how you felt, context, or anything to remember)..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
               {/* Action Buttons */}
               <div className="pt-4 border-t border-gray-200 flex gap-3">
                 <Button
@@ -225,15 +289,26 @@ export const EmotionModal: React.FC<EmotionModalProps> = ({
                 >
                   Not now
                 </Button>
-                <Button
-                  variant="primary"
-                  className="flex-1"
-                  onClick={handleConfirm}
-                  loading={confirming}
-                  disabled={loading || confirming}
-                >
-                  Log this emotion
-                </Button>
+                {isGuest ? (
+                  <Button
+                    variant="primary"
+                    className="flex-1"
+                    onClick={() => onOpenAuth && onOpenAuth()}
+                    disabled={loading || confirming}
+                  >
+                    Login to log
+                  </Button>
+                ) : (
+                  <Button
+                    variant="primary"
+                    className="flex-1"
+                    onClick={handleConfirm}
+                    loading={confirming}
+                    disabled={loading || confirming}
+                  >
+                    Log this emotion
+                  </Button>
+                )}
               </div>
             </div>
           </motion.div>

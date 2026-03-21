@@ -10,9 +10,6 @@ export const useEmotionLog = (isGuest: boolean = false) => {
 
   const logEmotion = async (data: {
     emotionId: number;
-    tier1EmotionId: number;
-    tier2EmotionId?: number;
-    tier3EmotionId?: number;
     notes?: string;
   }): Promise<EmotionLog | null> => {
     try {
@@ -25,9 +22,6 @@ export const useEmotionLog = (isGuest: boolean = false) => {
           id: Date.now().toString(),
           userId: 'guest',
           emotionId: data.emotionId,
-          tier1EmotionId: data.tier1EmotionId,
-          tier2EmotionId: data.tier2EmotionId,
-          tier3EmotionId: data.tier3EmotionId,
           notes: data.notes,
           loggedAt: new Date().toISOString(),
           createdAt: new Date().toISOString(),
@@ -43,29 +37,32 @@ export const useEmotionLog = (isGuest: boolean = false) => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('User not authenticated');
 
-        const { data: result, error: err } = await supabase
-          .from('emotion_logs')
-          .insert({
-            user_id: user.id,
-            emotion_id: data.emotionId,
-            tier_1_emotion_id: data.tier1EmotionId,
-            tier_2_emotion_id: data.tier2EmotionId,
-            tier_3_emotion_id: data.tier3EmotionId,
-            notes: data.notes,
-            logged_at: new Date().toISOString()
-          })
-          .select()
-          .single();
+        // Call server endpoint to log emotion (server uses service role key)
+        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const resp = await fetch(`${API_BASE_URL}/api/log-emotion`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            emotionId: data.emotionId,
+            notes: data.notes
+          }),
+        });
 
-        if (err) throw err;
-        // Map DB snake_case fields to app EmotionLog camelCase shape
+        if (!resp.ok) {
+          const errJson = await resp.json().catch(() => ({}));
+          throw new Error(errJson.error || 'Failed to log emotion');
+        }
+
+        const json = await resp.json();
+        const result = json.log || json;
+
         const mapped: EmotionLog = {
           id: (result && (result.id ? String(result.id) : Date.now().toString())) || Date.now().toString(),
           userId: result?.user_id || user.id,
           emotionId: result?.emotion_id || data.emotionId,
-          tier1EmotionId: result?.tier_1_emotion_id || data.tier1EmotionId,
-          tier2EmotionId: result?.tier_2_emotion_id || data.tier2EmotionId,
-          tier3EmotionId: result?.tier_3_emotion_id || data.tier3EmotionId,
           notes: result?.notes || data.notes,
           loggedAt: result?.logged_at || new Date().toISOString(),
           createdAt: result?.created_at || new Date().toISOString(),

@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config({ path: '.env.local' });
 
@@ -21,6 +22,17 @@ const modelName = process.env.ANTHROPIC_MODEL_NAME || 'claude-3-5-sonnet-2024102
 console.log(`Using model: ${modelName}`);
 
 const anthropic = new Anthropic({ apiKey });
+
+// Supabase admin client for server-side writes (requires service role key)
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+let supabaseAdmin: ReturnType<typeof createClient> | null = null;
+if (supabaseUrl && supabaseServiceRole) {
+  supabaseAdmin = createClient(supabaseUrl, supabaseServiceRole);
+} else {
+  console.warn('Supabase admin client not configured. Server persistence endpoints will fail without SUPABASE_SERVICE_ROLE_KEY.');
+}
 
 // Cache configuration
 const CACHE_DIR = path.join(process.cwd(), '.cache');
@@ -165,16 +177,120 @@ ONLY return the JSON array, nothing else.`,
         console.log(`Cached strategies for emotion: ${emotionName}`);
       }
 
+      // If emotionId provided in request body, and server has admin client, persist strategies
+      try {
+        const { emotionId } = req.body;
+        if (emotionId && strategies.length > 0 && supabaseAdmin) {
+          // Fetch existing strategy_text for this emotion to avoid duplicates
+          const { data: existingRows, error: selectErr } = await supabaseAdmin
+            .from('coping_strategies')
+            .select('strategy_text')
+            .eq('emotion_id', emotionId);
+
+          if (selectErr) {
+            console.error('Error checking existing strategies before insert:', selectErr.message || selectErr);
+          }
+
+          const existingSet = new Set(
+            (existingRows || []).map((r: any) => String(r.strategy_text || r.strategyText || '').trim().toLowerCase())
+          );
+          //TODO: The insert is not working. Need to investigate if it's a schema issue or something else. The error logs are not showing up either, which is concerning.
+          const rowsToInsert = strategies
+            .map((s) => ({
+              emotion_id: emotionId,
+              strategy_text: s,
+              generated_by: 'ai',
+            }))
+            .filter((r) => !existingSet.has(String(r.strategy_text).trim().toLowerCase()));
+
+          if (rowsToInsert.length > 0) {
+            const { error: insertErr } = await supabaseAdmin.from('coping_strategies').insert(rowsToInsert);
+            if (insertErr) {
+              console.error('Failed to persist strategies on server:', insertErr.message || insertErr);
+            } else {
+              console.log(`Persisted ${rowsToInsert.length} new strategies for emotion ID ${emotionId}`);
+            }
+          } else {
+            console.log(`No new strategies to persist for emotion ID ${emotionId}`);
+          }
+        }
+      } catch (persistErr) {
+        console.error('Error persisting strategies on server:', persistErr);
+      }
+
       return res.json({ strategies, fromCache: false });
     }
 
     return res.json({ strategies: [], fromCache: false });
   } catch (error) {
-    console.error('Error generating coping strategies:', error);
+    console.error('Error generating coping strategies:', error instanceof Error ? error.stack || error.message : error);
+    const isProd = process.env.NODE_ENV === 'production';
     res.status(500).json({
-      error: 'Failed to generate coping strategies',
-      details: error instanceof Error ? error.message : 'Unknown error',
+      error: isProd ? 'Failed to generate coping strategies' : (error instanceof Error ? error.message : 'Unknown error'),
+      ...(isProd ? {} : { stack: error instanceof Error ? error.stack : undefined }),
     });
+  }
+});
+
+// Fetch existing coping strategies for an emotion (server-side read)
+app.get('/api/coping-strategies', async (req: Request, res: Response) => {
+  try {
+    const emotionId = Number(req.query.emotionId);
+    if (!emotionId || !supabaseAdmin) {
+      return res.status(400).json({ error: 'Missing emotionId or server not configured' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('coping_strategies')
+      .select('strategy_text')
+      .eq('emotion_id', emotionId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Error querying coping_strategies on server:', error);
+      return res.status(500).json({ error: 'Failed to query coping strategies' });
+    }
+
+    const strategies = (data || []).map((r: any) => r.strategy_text || r.strategyText || String(r));
+    return res.json({ strategies });
+  } catch (err) {
+    console.error('Error in GET /api/coping-strategies:', err instanceof Error ? err.stack || err.message : err);
+    const isProd = process.env.NODE_ENV === 'production';
+    return res.status(500).json({ error: isProd ? 'Internal server error' : (err instanceof Error ? err.message : 'Internal server error') });
+  }
+});
+
+// Health endpoint to check DB read/write using the service role key
+app.get('/api/health-db', async (req: Request, res: Response) => {
+  try {
+    if (!supabaseAdmin) return res.status(500).json({ ok: false, error: 'supabaseAdmin not configured' });
+
+    // Simple read check
+    const { data: readData, error: readErr } = await supabaseAdmin.from('emotions').select('id').limit(1);
+    if (readErr) {
+      console.error('DB read check failed:', readErr.message || readErr);
+      return res.status(500).json({ ok: false, stage: 'read', error: readErr.message || String(readErr) });
+    }
+
+    // Try a write and delete (healthcheck) in coping_strategies to ensure inserts work
+    const testRow = { emotion_id: null, strategy_text: 'healthcheck', generated_by: 'healthcheck' } as any;
+    const { data: insertData, error: insertErr } = await supabaseAdmin.from('coping_strategies').insert(testRow).select().single();
+    if (insertErr) {
+      console.error('DB write check failed:', insertErr.message || insertErr);
+      return res.status(500).json({ ok: false, stage: 'write', error: insertErr.message || String(insertErr) });
+    }
+
+    // Cleanup inserted test row
+    try {
+      await supabaseAdmin.from('coping_strategies').delete().eq('id', insertData.id);
+    } catch (cleanupErr) {
+      console.warn('Healthcheck cleanup failed:', cleanupErr);
+    }
+
+    return res.json({ ok: true, read: Array.isArray(readData) ? readData.length : 0, write: !!insertData });
+  } catch (err) {
+    console.error('Error in /api/health-db:', err instanceof Error ? err.stack || err.message : err);
+    return res.status(500).json({ ok: false, error: err instanceof Error ? err.message : 'unknown' });
   }
 });
 
@@ -217,4 +333,79 @@ app.post('/api/analyze-mood', async (req: Request, res: Response) => {
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
+});
+
+// Log an emotion on behalf of a user. Expects { userId, emotionId, notes }
+app.post('/api/log-emotion', async (req: Request, res: Response) => {
+  try {
+    if (!supabaseAdmin) return res.status(500).json({ error: 'Server not configured for DB writes' });
+
+    const { userId: bodyUserId, emotionId, tier1EmotionId, tier2EmotionId, tier3EmotionId, notes } = req.body || {};
+
+    // Prefer token-based verification. If Authorization header with Bearer token is provided,
+    // validate it with Supabase and use the verified user id.
+    let userIdToUse: string | null = null;
+    const authHeader = (req.headers.authorization || req.headers.Authorization) as string | undefined;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const { data: userData, error: userErr } = await supabaseAdmin.auth.getUser(token as string);
+        if (userErr) {
+          console.error('Token verification failed:', userErr);
+          return res.status(401).json({ error: 'Invalid access token' });
+        }
+        if (!userData || !userData.user) {
+          return res.status(401).json({ error: 'Invalid access token' });
+        }
+        userIdToUse = userData.user.id;
+      } catch (e) {
+        console.error('Error verifying token:', e instanceof Error ? e.stack || e.message : e);
+        return res.status(500).json({ error: 'Failed to verify access token' });
+      }
+    }
+
+    // If no token provided, fallback to body userId (development). Log a warning.
+    if (!userIdToUse) {
+      if (!bodyUserId) return res.status(400).json({ error: 'Missing userId or Authorization token' });
+      console.warn('No Authorization token provided; using userId from request body. This is less secure.');
+      userIdToUse = bodyUserId;
+    }
+
+    if (!emotionId) return res.status(400).json({ error: 'Missing emotionId' });
+
+    // Optional: validate emotion exists
+    try {
+      const { data: emotionRow, error: emotionErr } = await supabaseAdmin.from('emotions').select('id, tier, parent_id').eq('id', emotionId).limit(1).single();
+      if (emotionErr) {
+        console.error('Error validating emotion id:', emotionErr);
+        return res.status(400).json({ error: 'Invalid emotionId' });
+      }
+    } catch (e) {
+      console.error('Exception validating emotion id:', e);
+      return res.status(500).json({ error: 'Failed to validate emotion id' });
+    }
+
+    const payload = {
+      user_id: userIdToUse,
+      emotion_id: emotionId,
+      tier_1_emotion_id: tier1EmotionId ?? null,
+      tier_2_emotion_id: tier2EmotionId ?? null,
+      tier_3_emotion_id: tier3EmotionId ?? null,
+      notes: notes || null,
+      logged_at: new Date().toISOString(),
+    } as any;
+
+    const { data, error } = await supabaseAdmin.from('emotion_logs').insert(payload).select().single();
+    if (error) {
+      console.error('Error inserting emotion_log on server:', error instanceof Error ? error.stack || error.message : error);
+      const isProd = process.env.NODE_ENV === 'production';
+      return res.status(500).json({ error: isProd ? 'Failed to insert emotion log' : (error instanceof Error ? error.message : String(error)) });
+    }
+
+    return res.json({ log: data });
+  } catch (err) {
+    console.error('Error in /api/log-emotion:', err instanceof Error ? err.stack || err.message : err);
+    const isProd = process.env.NODE_ENV === 'production';
+    return res.status(500).json({ error: isProd ? 'Internal server error' : (err instanceof Error ? err.message : String(err)) });
+  }
 });

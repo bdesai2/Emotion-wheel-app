@@ -6,9 +6,10 @@ interface AuthProps {
   onSignIn: (email: string, password: string) => Promise<void>;
   onSignUp: (email: string, password: string) => Promise<void>;
   onContinueAsGuest: () => void;
+  onSignInWithProvider?: (provider: string) => Promise<void>;
 }
 
-export const Auth: React.FC<AuthProps> = ({ onSignIn, onSignUp, onContinueAsGuest }) => {
+export const Auth: React.FC<AuthProps> = ({ onSignIn, onSignUp, onContinueAsGuest, onSignInWithProvider }) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -106,6 +107,35 @@ export const Auth: React.FC<AuthProps> = ({ onSignIn, onSignUp, onContinueAsGues
             <span className="text-sm text-gray-500">or</span>
             <div className="flex-1 h-px bg-gray-300"></div>
           </div>
+
+          {/* Provider (Google) Button */}
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full mb-3 flex items-center justify-center gap-2"
+            onClick={async () => {
+              setLoading(true);
+              setError(null);
+              try {
+                // call optional provider handler passed from parent
+                // if not provided, fallback to a noop
+                // eslint-disable-next-line @typescript-eslint/no-empty-function
+                const fn = (onSignInWithProvider as any) || (() => Promise.resolve());
+                await fn('google');
+              } catch (err) {
+                const message = err instanceof Error ? err.message : 'OAuth failed';
+                setError(message);
+              } finally {
+                setLoading(false);
+              }
+            }}
+            disabled={loading}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="18" height="18" className="inline">
+              <path fill="#fbc02d" d="M43.6 20.5H42V20H24v8h11.3C34.7 32 30.2 35 24 35c-7 0-12.6-5.6-12.6-12.6S17 9.8 24 9.8c3.6 0 6.7 1.4 9 3.6l6.3-6.3C36.9 4 30.9 1.8 24 1.8 12 1.8 2.4 11.5 2.4 23.5S12 45.2 24 45.2c11.1 0 20.1-8 21.6-18.7.4-2.1.6-4.1.6-6z"/>
+            </svg>
+            <span>Sign in with Google</span>
+          </Button>
 
           {/* Guest Button */}
           <Button
