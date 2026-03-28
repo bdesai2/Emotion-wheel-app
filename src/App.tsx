@@ -67,7 +67,8 @@ function App() {
       } else {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.access_token) throw new Error('Not authenticated');
-        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const API_BASE_URL = 'https://emotion-wheel-app-production.up.railway.app';
+        //import.meta.env.VITE_API_URL || 'http://localhost:3001';
         const resp = await fetch(
           `${API_BASE_URL}/api/emotion-logs?page=${page}&pageSize=${LOG_PAGE_SIZE}`,
           {
