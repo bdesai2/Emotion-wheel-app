@@ -92,7 +92,14 @@ function cacheResponse(cacheKey: string, response: string): void {
 }
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'https://emotion-wheel-app.vercel.app',
+    /https:\/\/emotion-wheel-.*\.vercel\.app$/,  // covers all preview URLs too
+  ],
+  credentials: true,
+}));
 app.use(express.json());
 
 // Health check endpoint
