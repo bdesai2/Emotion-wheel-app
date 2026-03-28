@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3001;
 
 const apiKey = process.env.ANTHROPIC_API_KEY || process.env.VITE_ANTHROPIC_API_KEY;
 if (!apiKey) {
-  console.error('VITE_ANTHROPIC_API_KEY is not set in .env.local');
+  console.error('Anthropic key is not set.');
   process.exit(1);
 }
 
