@@ -147,7 +147,7 @@ export const useAuth = () => {
         window.addEventListener('message', handler);
 
         // Also set a timeout to fail gracefully
-        const t = window.setTimeout(async () => {
+        window.setTimeout(async () => {
           if (settled) return;
           window.removeEventListener('message', handler);
           try {

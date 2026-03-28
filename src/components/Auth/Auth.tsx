@@ -111,7 +111,7 @@ export const Auth: React.FC<AuthProps> = ({ onSignIn, onSignUp, onContinueAsGues
           {/* Provider (Google) Button */}
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             className="w-full mb-3 flex items-center justify-center gap-2"
             onClick={async () => {
               setLoading(true);

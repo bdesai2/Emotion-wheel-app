@@ -127,7 +127,7 @@ function App() {
         }}
         onContinueAsGuest={continueAsGuest}
         onSignInWithProvider={async (provider: string) => {
-          const { error } = await signInWithProvider?.(provider as 'google');
+          const { error } = await signInWithProvider?.(provider as 'google') as { error?: unknown };;
           if (error) throw new Error(error as string);
         }}
       />
@@ -227,7 +227,7 @@ function App() {
           }}
           onContinueAsGuest={continueAsGuest}
           onSignInWithProvider={async (provider: string) => {
-            const { error } = await signInWithProvider?.(provider as 'google');
+            const { error } = await signInWithProvider?.(provider as 'google')  as { error?: unknown };;
             if (error) throw new Error(error as string);
           }}
         />
