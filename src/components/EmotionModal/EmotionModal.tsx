@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Emotion } from '../../types/emotion.types';
 import { generateCopingStrategies } from '../../services/anthropic';
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 import { Button } from '../ui/Button';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 interface EmotionModalProps {
   emotion: Emotion | null;
