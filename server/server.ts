@@ -12,7 +12,7 @@ dotenv.config({ path: '.env.local' });
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-const apiKey = process.env.VITE_ANTHROPIC_API_KEY;
+const apiKey = process.env.ANTHROPIC_API_KEY || process.env.VITE_ANTHROPIC_API_KEY;
 if (!apiKey) {
   console.error('VITE_ANTHROPIC_API_KEY is not set in .env.local');
   process.exit(1);
@@ -93,11 +93,18 @@ function cacheResponse(cacheKey: string, response: string): void {
 
 // Middleware
 app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'https://emotion-wheel-app.vercel.app',
-    /https:\/\/emotion-wheel-.*\.vercel\.app$/,  // covers all preview URLs too
-  ],
+  origin: (origin, callback) => {
+    const allowed = [
+      'http://localhost:5173',
+      'https://emotion-wheel-app.vercel.app',
+    ];
+    // Allow all vercel.app preview URLs
+    if (!origin || allowed.includes(origin) || origin.endsWith('.vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
 app.use(express.json());
