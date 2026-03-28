@@ -1,4 +1,35 @@
 /* App custom styles */
+/* Theme colors */
+:root {
+  --theme-primary: #8A7650;
+  --theme-primary-hover: #af9668;
+  --theme-primary-ring: rgba(109, 93, 63, 0.5);
+  
+  --theme-secondary: #8E977D;
+  --theme-secondary-hover: #a1ac8e;
+  --theme-secondary-ring: rgba(80, 87, 66, 0.5);
+  
+  --theme-danger: #ef4444;
+  --theme-danger-hover: #dc2626;
+  --theme-danger-ring: rgba(239, 68, 68, 0.5);
+  
+  --theme-primary-light: rgba(79, 70, 229, 0.1);
+  --theme-background: #DBCEA5;
+  --theme-modal-background: rgba(255, 255, 255, 0.95);
+  --theme-page: #ECE7D1;
+  
+  --theme-text: #1f2937;
+  --theme-text-on-primary: #ffffff;
+  --theme-text-secondary: #4b5563;
+  
+  --theme-spinner: #8A7650;
+}
+
+body { background-color: var(--theme-page);}
+.wheel-wrapper { background-color: var(--theme-background) !important;}
+.button { background-color: var(--theme-primary) !important; color: var(--theme-text-on-primary) !important; border: 2px solid var(--theme-primary-ring) !important;  }
+.button:hover { background-color: var(--theme-primary-hover) !important; }
+header h1 { color: var(--theme-primary) !important; }
 
 /* Smooth transitions */
 * {

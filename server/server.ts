@@ -103,7 +103,7 @@ app.get('/health', (req: Request, res: Response) => {
 // Endpoint to generate coping strategies
 app.post('/api/coping-strategies', async (req: Request, res: Response) => {
   try {
-    const { emotionName, emotionDescription, level } = req.body;
+    const { emotionName, emotionDescription, emotionId, level } = req.body;
 
     if (!emotionName || !emotionDescription) {
       return res.status(400).json({
@@ -177,45 +177,55 @@ ONLY return the JSON array, nothing else.`,
         console.log(`Cached strategies for emotion: ${emotionName}`);
       }
 
-      // If emotionId provided in request body, and server has admin client, persist strategies
+      // Persist AI-generated strategies to coping_strategies table
       try {
-        const { emotionId } = req.body;
-        if (emotionId && strategies.length > 0 && supabaseAdmin) {
-          // Fetch existing strategy_text for this emotion to avoid duplicates
-          const { data: existingRows, error: selectErr } = await supabaseAdmin
-            .from('coping_strategies')
-            .select('strategy_text')
-            .eq('emotion_id', emotionId);
-
-          if (selectErr) {
-            console.error('Error checking existing strategies before insert:', selectErr.message || selectErr);
-          }
-
-          const existingSet = new Set(
-            (existingRows || []).map((r: any) => String(r.strategy_text || r.strategyText || '').trim().toLowerCase())
-          );
-          //TODO: The insert is not working. Need to investigate if it's a schema issue or something else. The error logs are not showing up either, which is concerning.
-          const rowsToInsert = strategies
-            .map((s) => ({
-              emotion_id: emotionId,
-              strategy_text: s,
-              generated_by: 'ai',
-            }))
-            .filter((r) => !existingSet.has(String(r.strategy_text).trim().toLowerCase()));
-
-          if (rowsToInsert.length > 0) {
-            const { error: insertErr } = await supabaseAdmin.from('coping_strategies').insert(rowsToInsert);
-            if (insertErr) {
-              console.error('Failed to persist strategies on server:', insertErr.message || insertErr);
-            } else {
-              console.log(`Persisted ${rowsToInsert.length} new strategies for emotion ID ${emotionId}`);
-            }
+        if (emotionId && strategies.length > 0) {
+          if (!supabaseAdmin) {
+            console.warn('supabaseAdmin not configured — cannot persist coping strategies. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local');
           } else {
-            console.log(`No new strategies to persist for emotion ID ${emotionId}`);
+            // Fetch existing strategies for this emotion to avoid duplicates
+            const { data: existingRows, error: selectErr } = await supabaseAdmin
+              .from('coping_strategies')
+              .select('strategy_text')
+              .eq('emotion_id', emotionId);
+
+            if (selectErr) {
+              console.error('Error checking existing strategies before insert:', selectErr.message || selectErr);
+            }
+
+            const existingSet = new Set(
+              (existingRows || []).map((r: any) => String(r.strategy_text || '').trim().toLowerCase())
+            );
+
+            const rowsToInsert = strategies
+              .map((s) => ({
+                emotion_id: emotionId,
+                strategy_text: s,
+                generated_by: 'ai' as const,
+              }))
+              .filter((r) => !existingSet.has(r.strategy_text.trim().toLowerCase()));
+
+            if (rowsToInsert.length > 0) {
+              console.log(`Inserting ${rowsToInsert.length} strategies for emotion ID ${emotionId}:`, JSON.stringify(rowsToInsert));
+              const { data: insertData, error: insertErr } = await supabaseAdmin
+                .from('coping_strategies')
+                .insert(rowsToInsert)
+                .select();
+
+              if (insertErr) {
+                console.error('Failed to persist strategies:', insertErr.message, insertErr.details, insertErr.hint);
+              } else {
+                console.log(`Persisted ${insertData?.length ?? 0} new strategies for emotion ID ${emotionId}`);
+              }
+            } else {
+              console.log(`All strategies already exist for emotion ID ${emotionId} — nothing to insert`);
+            }
           }
+        } else if (!emotionId) {
+          console.warn('No emotionId in request body — skipping coping strategy persistence');
         }
       } catch (persistErr) {
-        console.error('Error persisting strategies on server:', persistErr);
+        console.error('Error persisting strategies on server:', persistErr instanceof Error ? persistErr.stack : persistErr);
       }
 
       return res.json({ strategies, fromCache: false });
@@ -331,6 +341,112 @@ app.post('/api/analyze-mood', async (req: Request, res: Response) => {
   }
 });
 
+// Get paginated emotion logs with breadcrumb (tier path) for the authenticated user
+app.get('/api/emotion-logs', async (req: Request, res: Response) => {
+  try {
+    if (!supabaseAdmin) return res.status(500).json({ error: 'Server not configured for DB access' });
+
+    // Authenticate via Bearer token
+    const authHeader = (req.headers.authorization || req.headers.Authorization) as string | undefined;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const token = authHeader.split(' ')[1];
+    const { data: userData, error: userErr } = await supabaseAdmin.auth.getUser(token);
+    if (userErr || !userData?.user) {
+      return res.status(401).json({ error: 'Invalid access token' });
+    }
+    const userId = userData.user.id;
+
+    // Pagination params
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string) || 20));
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    // Get total count
+    const { count, error: countErr } = await supabaseAdmin
+      .from('emotion_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    if (countErr) {
+      console.error('Error counting emotion logs:', countErr);
+      return res.status(500).json({ error: 'Failed to count logs' });
+    }
+
+    const total = count || 0;
+    const totalPages = Math.ceil(total / pageSize);
+
+    // Get logs with joined emotion data
+    const { data: logs, error: logsErr } = await supabaseAdmin
+      .from('emotion_logs')
+      .select(`
+        id, emotion_id, notes, logged_at, created_at,
+        emotion:emotions!inner(id, name, color, tier, parent_id)
+      `)
+      .eq('user_id', userId)
+      .order('logged_at', { ascending: false })
+      .range(from, to);
+
+    if (logsErr) {
+      console.error('Error fetching emotion logs:', logsErr);
+      return res.status(500).json({ error: 'Failed to fetch logs' });
+    }
+
+    // Build breadcrumbs: for each log, walk up the parent chain to build Tier1 > Tier2 > Tier3
+    // First, collect all unique emotion ids we need to resolve parents for
+    const emotionIds = new Set<number>();
+    for (const log of (logs || [])) {
+      const em = (log as any).emotion;
+      if (em) {
+        emotionIds.add(em.id);
+        if (em.parent_id) emotionIds.add(em.parent_id);
+      }
+    }
+
+    // Fetch all emotions we might need (parents/grandparents)
+    let emotionMap: Record<number, { id: number; name: string; color: string; tier: number; parent_id: number | null }> = {};
+    if (emotionIds.size > 0) {
+      // We need up to 3 levels, so fetch all emotions referenced plus their parents
+      const { data: allEmotions } = await supabaseAdmin
+        .from('emotions')
+        .select('id, name, color, tier, parent_id');
+      if (allEmotions) {
+        for (const e of allEmotions) {
+          emotionMap[e.id] = e;
+        }
+      }
+    }
+
+    // Build breadcrumb string for an emotion id
+    function buildBreadcrumb(emotionId: number): string {
+      const parts: string[] = [];
+      let current = emotionMap[emotionId];
+      while (current) {
+        parts.unshift(current.name);
+        current = current.parent_id ? emotionMap[current.parent_id] : (undefined as any);
+      }
+      return parts.join(' › ');
+    }
+
+    const result = (logs || []).map((log: any) => ({
+      id: log.id,
+      emotionId: log.emotion_id,
+      emotionName: log.emotion?.name || 'Unknown',
+      emotionColor: log.emotion?.color || '#6B7280',
+      breadcrumb: log.emotion ? buildBreadcrumb(log.emotion.id) : 'Unknown',
+      notes: log.notes || null,
+      loggedAt: log.logged_at,
+    }));
+
+    return res.json({ logs: result, total, page, pageSize, totalPages });
+  } catch (err) {
+    console.error('Error in GET /api/emotion-logs:', err instanceof Error ? err.stack || err.message : err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
@@ -340,7 +456,7 @@ app.post('/api/log-emotion', async (req: Request, res: Response) => {
   try {
     if (!supabaseAdmin) return res.status(500).json({ error: 'Server not configured for DB writes' });
 
-    const { userId: bodyUserId, emotionId, tier1EmotionId, tier2EmotionId, tier3EmotionId, notes } = req.body || {};
+    const { emotionId, notes } = req.body || {};
 
     // Prefer token-based verification. If Authorization header with Bearer token is provided,
     // validate it with Supabase and use the verified user id.
@@ -364,19 +480,23 @@ app.post('/api/log-emotion', async (req: Request, res: Response) => {
       }
     }
 
-    // If no token provided, fallback to body userId (development). Log a warning.
+    // Require a valid access token — no unauthenticated fallback
     if (!userIdToUse) {
-      if (!bodyUserId) return res.status(400).json({ error: 'Missing userId or Authorization token' });
-      console.warn('No Authorization token provided; using userId from request body. This is less secure.');
-      userIdToUse = bodyUserId;
+      return res.status(401).json({ error: 'Authentication required. Please sign in to log emotions.' });
     }
 
     if (!emotionId) return res.status(400).json({ error: 'Missing emotionId' });
 
-    // Optional: validate emotion exists
+    // Validate emotion exists
     try {
-      const { data: emotionRow, error: emotionErr } = await supabaseAdmin.from('emotions').select('id, tier, parent_id').eq('id', emotionId).limit(1).single();
-      if (emotionErr) {
+      const { data: emotionRow, error: emotionErr } = await supabaseAdmin
+        .from('emotions')
+        .select('id')
+        .eq('id', emotionId)
+        .limit(1)
+        .single();
+
+      if (emotionErr || !emotionRow) {
         console.error('Error validating emotion id:', emotionErr);
         return res.status(400).json({ error: 'Invalid emotionId' });
       }
@@ -388,9 +508,6 @@ app.post('/api/log-emotion', async (req: Request, res: Response) => {
     const payload = {
       user_id: userIdToUse,
       emotion_id: emotionId,
-      tier_1_emotion_id: tier1EmotionId ?? null,
-      tier_2_emotion_id: tier2EmotionId ?? null,
-      tier_3_emotion_id: tier3EmotionId ?? null,
       notes: notes || null,
       logged_at: new Date().toISOString(),
     } as any;

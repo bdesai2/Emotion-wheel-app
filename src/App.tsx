@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import type { Emotion } from './types/emotion.types';
 import { useAuth } from './hooks/useAuth';
@@ -7,8 +7,11 @@ import { useEmotionStore } from './store/useEmotionStore';
 import { Auth } from './components/Auth/Auth';
 import { EmotionWheel } from './components/EmotionWheel/EmotionWheel';
 import { EmotionModal } from './components/EmotionModal/EmotionModal';
+import { EmotionLogList } from './components/EmotionLogList/EmotionLogList';
+import type { EmotionLogEntry } from './components/EmotionLogList/EmotionLogList';
 import { Button } from './components/ui/Button';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
+import { supabase } from './services/supabase';
 import './App.css';
 import { useEffect } from 'react';
 
@@ -28,6 +31,73 @@ function App() {
   } = useEmotionStore();
   const [loggingEmotion, setLoggingEmotion] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+
+  // Emotion log list state
+  const [showLogs, setShowLogs] = useState(false);
+  const [logEntries, setLogEntries] = useState<EmotionLogEntry[]>([]);
+  const [logsPage, setLogsPage] = useState(1);
+  const [logsTotalPages, setLogsTotalPages] = useState(1);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsError, setLogsError] = useState<string | null>(null);
+  const LOG_PAGE_SIZE = 20;
+
+  const fetchLogs = useCallback(async (page: number) => {
+    setLogsLoading(true);
+    setLogsError(null);
+    try {
+      if (isGuest) {
+        // Guest logs from localStorage
+        const raw = JSON.parse(localStorage.getItem('guest_emotion_logs') || '[]') as any[];
+        const sorted = [...raw].sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime());
+        const total = sorted.length;
+        const totalPages = Math.ceil(total / LOG_PAGE_SIZE) || 1;
+        const start = (page - 1) * LOG_PAGE_SIZE;
+        const slice = sorted.slice(start, start + LOG_PAGE_SIZE);
+        setLogEntries(slice.map((l: any) => ({
+          id: l.id,
+          emotionId: l.emotionId,
+          emotionName: `Emotion #${l.emotionId}`,
+          emotionColor: '#6B7280',
+          breadcrumb: `Emotion #${l.emotionId}`,
+          notes: l.notes || null,
+          loggedAt: l.loggedAt,
+        })));
+        setLogsPage(page);
+        setLogsTotalPages(totalPages);
+      } else {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error('Not authenticated');
+        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const resp = await fetch(
+          `${API_BASE_URL}/api/emotion-logs?page=${page}&pageSize=${LOG_PAGE_SIZE}`,
+          {
+            headers: { 'Authorization': `Bearer ${session.access_token}` },
+          }
+        );
+        if (!resp.ok) {
+          const errJson = await resp.json().catch(() => ({}));
+          throw new Error(errJson.error || 'Failed to fetch logs');
+        }
+        const json = await resp.json();
+        setLogEntries(json.logs || []);
+        setLogsPage(json.page || 1);
+        setLogsTotalPages(json.totalPages || 1);
+      }
+    } catch (err) {
+      setLogsError(err instanceof Error ? err.message : 'Failed to fetch logs');
+    } finally {
+      setLogsLoading(false);
+    }
+  }, [isGuest]);
+
+  const handleShowLogs = useCallback(() => {
+    setShowLogs(true);
+    fetchLogs(1);
+  }, [fetchLogs]);
+
+  const handleLogsPageChange = useCallback((page: number) => {
+    fetchLogs(page);
+  }, [fetchLogs]);
 
   useEffect(() => {
     // Close auth modal when a non-guest user signs in
@@ -87,6 +157,11 @@ function App() {
       reset();
       setSelectedTier1(null);
       setSelectedTier2(null);
+
+      // Refresh logs if the log list is open
+      if (showLogs) {
+        fetchLogs(logsPage);
+      }
 
       // Show success message
       alert('Emotion logged successfully! 🎉');
@@ -168,6 +243,28 @@ function App() {
           <>
             <EmotionWheel
               onEmotionSelect={handleEmotionSelect}
+            />
+
+            {/* Show My Log button */}
+            <div className="flex justify-center py-4">
+              <Button className="button" variant="primary"
+                size="md"
+                onClick={handleShowLogs}
+              >
+                📓 Show My Log
+              </Button>
+            </div>
+
+            {/* Emotion Log Modal */}
+            <EmotionLogList
+              open={showLogs}
+              logs={logEntries}
+              page={logsPage}
+              totalPages={logsTotalPages}
+              loading={logsLoading}
+              error={logsError}
+              onPageChange={handleLogsPageChange}
+              onClose={() => setShowLogs(false)}
             />
 
             {/* Modal */}

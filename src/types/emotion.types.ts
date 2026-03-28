@@ -14,10 +14,7 @@ export interface Emotion {
 export interface EmotionLog {
   id: string;
   userId: string;
-  emotionId: number;
-  tier1EmotionId: number;
-  tier2EmotionId?: number;
-  tier3EmotionId?: number;
+  emotionId: number;  
   notes?: string;
   loggedAt: string;
   createdAt: string;

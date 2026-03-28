@@ -25,7 +25,7 @@ export const EmotionWheel: React.FC<EmotionWheelProps> = ({ emotions, onEmotionS
     (async () => {
       try {
         const { data: t1Rows, error: err1 } = await supabase
-          .from('emotions').select('*').eq('tier', 1).eq('enabled', true).order('id', { ascending: true });
+          .from('emotions').select('*').eq('tier', 1).eq('enabled', true).order('id', { ascending: true }); //tier 1 emotions
 
         if (err1 || !t1Rows || t1Rows.length === 0) {
           console.error('Failed to load emotions for wheel, falling back to constants', err1);    
@@ -36,14 +36,14 @@ export const EmotionWheel: React.FC<EmotionWheelProps> = ({ emotions, onEmotionS
         const tier1Ids = t1Rows.map((r: any) => r.id);
 
         const { data: t2Rows } = await supabase
-          .from('emotions').select('*').in('parent_id', tier1Ids).eq('tier', 2).eq('enabled', true).order('id', { ascending: true });
+          .from('emotions').select('*').in('parent_id', tier1Ids).eq('tier', 2).eq('enabled', true).order('id', { ascending: true }); //tier 2 emotions for the selected parent
 
         const tier2Ids = (t2Rows || []).map((r: any) => r.id);
 
         let tier3Rows: any[] = [];
         if (tier2Ids.length > 0) {
           const { data: t3, error: err3 } = await supabase
-            .from('emotions').select('*').in('parent_id', tier2Ids).eq('tier', 3).eq('enabled', true).order('id', { ascending: true });
+            .from('emotions').select('*').in('parent_id', tier2Ids).eq('tier', 3).eq('enabled', true).order('id', { ascending: true }); //tier 3 emotions for the selected parents
           if (!err3) tier3Rows = t3 || [];
         }
 
@@ -72,8 +72,8 @@ export const EmotionWheel: React.FC<EmotionWheelProps> = ({ emotions, onEmotionS
             id: r.id, name: r.name, tier: Number(r.tier) as 1 | 2 | 3,
             parentId: r.parent_id ?? r.parentId ?? null,
             description: r.description ?? r.desc ?? '',
-            triggers: r.triggers, //coerceList(triggersField),
-            physicalSensations: r.physicalSensations, //coerceList(physicalField) as any,
+            triggers: coerceList(triggersField) as string,
+            physicalSensations: coerceList(physicalField) as string,
             color: r.color ?? '#999',
             characteristics: Array.isArray(r.characteristics)
               ? r.characteristics
@@ -158,7 +158,7 @@ export const EmotionWheel: React.FC<EmotionWheelProps> = ({ emotions, onEmotionS
   pushAll(localEmotions);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-blue-50 to-indigo-50">
+    <div className="wheel-wrapper flex flex-col items-center justify-center bg min-h-screen p-4">
       <h1 className="text-4xl font-bold text-gray-800 mb-2">How are you feeling?</h1>
       <p className="text-gray-600 mb-8">Select your emotion by clicking on the wheel segments</p>
 
@@ -254,7 +254,7 @@ export const EmotionWheel: React.FC<EmotionWheelProps> = ({ emotions, onEmotionS
           {/* Center white circle showing level. Only the center circle consumes clicks so underlying segments remain clickable. */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div
-              className="w-24 h-24 rounded-full bg-white flex flex-col items-center justify-center shadow-2xl pointer-events-auto"
+              className="w-32 h-32 rounded-full bg-white flex flex-col items-center justify-center shadow-2xl pointer-events-auto"
               onClick={(e) => e.stopPropagation()}
               style={{ cursor: 'default' }}
             >

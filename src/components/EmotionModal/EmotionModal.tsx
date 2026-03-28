@@ -30,6 +30,12 @@ export const EmotionModal: React.FC<EmotionModalProps> = ({
   const saveTimer = useRef<number | null>(null);
 
   useEffect(() => {
+    // Reset all per-emotion state when the selected emotion changes
+    setStrategies([]);
+    setFetchedOnce(false);
+    setLoading(false);
+    setError(null);
+
     // When emotion opens, load any saved draft
     if (emotion) {
       try {
@@ -104,7 +110,7 @@ export const EmotionModal: React.FC<EmotionModalProps> = ({
         console.error('Failed to check existing strategies on server:', dbErr);
       }
 
-      const result = await generateCopingStrategies(emotion.name, emotion.description, emotion.id);
+      const result = await generateCopingStrategies(emotion.name, emotion.description, emotion.id, emotion.tier);
       setStrategies(result);
       setFetchedOnce(true);
     } catch (err) {
@@ -194,19 +200,37 @@ export const EmotionModal: React.FC<EmotionModalProps> = ({
                 <p className="text-gray-700">{emotion.description}</p>
               </div>
 
-                {/* Triggers & Physical Sensations (from DB if present) */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Triggers</h3>
-                  <div className="text-gray-700 space-y-3">
-                    {/* triggers: support several possible field names */}
-                    {emotion.triggers}
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Physical Sensations</h3>
-                  <div className="text-gray-700 space-y-3">
-                    {/* physical sensations: support several possible field names */}
-                    {emotion.physicalSensations}
-                  </div>
+                {/* Triggers & Physical Sensations (from DB if present, stored as CSV) */}
+                {(emotion.triggers || emotion.physicalSensations) && (
+                <div className="space-y-4">
+                  {emotion.triggers && (
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-3">Triggers</h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        {String(emotion.triggers).split(',').map(item => item.trim()).filter(Boolean).map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-gray-700">
+                            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: emotion.color }} />
+                            <span className="text-sm">{item.charAt(0).toUpperCase() + item.slice(1)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {emotion.physicalSensations && (
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-3">Physical Sensations</h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        {String(emotion.physicalSensations).split(',').map(item => item.trim()).filter(Boolean).map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-gray-700">
+                            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: emotion.color }} />
+                            <span className="text-sm">{item.charAt(0).toUpperCase() + item.slice(1)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
+                )}
 
               {/* Characteristics */}
               {emotion.characteristics && emotion.characteristics.length > 0 && (
@@ -293,7 +317,10 @@ export const EmotionModal: React.FC<EmotionModalProps> = ({
                   <Button
                     variant="primary"
                     className="flex-1"
-                    onClick={() => onOpenAuth && onOpenAuth()}
+                    onClick={() => {
+                      onClose();
+                      onOpenAuth && onOpenAuth();
+                    }}
                     disabled={loading || confirming}
                   >
                     Login to log

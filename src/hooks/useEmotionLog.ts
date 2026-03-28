@@ -34,8 +34,8 @@ export const useEmotionLog = (isGuest: boolean = false) => {
         setLoading(false);
         return emotionLog;
       } else {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('User not authenticated');
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error('User not authenticated');
 
         // Call server endpoint to log emotion (server uses service role key)
         const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -43,9 +43,9 @@ export const useEmotionLog = (isGuest: boolean = false) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
-            userId: user.id,
             emotionId: data.emotionId,
             notes: data.notes
           }),
@@ -61,7 +61,7 @@ export const useEmotionLog = (isGuest: boolean = false) => {
 
         const mapped: EmotionLog = {
           id: (result && (result.id ? String(result.id) : Date.now().toString())) || Date.now().toString(),
-          userId: result?.user_id || user.id,
+          userId: result?.user_id || '',
           emotionId: result?.emotion_id || data.emotionId,
           notes: result?.notes || data.notes,
           loggedAt: result?.logged_at || new Date().toISOString(),

@@ -168,9 +168,7 @@ CREATE TABLE emotion_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   emotion_id INTEGER REFERENCES emotions(id),
-  tier_1_emotion_id INTEGER REFERENCES emotions(id),
-  tier_2_emotion_id INTEGER REFERENCES emotions(id),
-  tier_3_emotion_id INTEGER REFERENCES emotions(id),
+
   notes TEXT,
   logged_at TIMESTAMP DEFAULT NOW(),
   created_at TIMESTAMP DEFAULT NOW(),
