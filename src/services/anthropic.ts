@@ -1,5 +1,10 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
+// Debug log to verify API base URL at runtime in deployed environments
+// (Safe to leave; remove later if you prefer a quieter console.)
+// eslint-disable-next-line no-console
+console.log('[Emotion Wheel] API_BASE_URL:', API_BASE_URL);
+
 export const generateCopingStrategies = async (
   emotionName: string,
   emotionDescription: string,
