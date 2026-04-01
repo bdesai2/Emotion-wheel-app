@@ -38,8 +38,7 @@ export const useEmotionLog = (isGuest: boolean = false) => {
         if (!session?.access_token) throw new Error('User not authenticated');
 
         // Call server endpoint to log emotion (server uses service role key)
-        const API_BASE_URL = "https://emotion-wheel-app-production.up.railway.app";
-//import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
         const resp = await fetch(`${API_BASE_URL}/api/log-emotion`, {
           method: 'POST',
           headers: {
